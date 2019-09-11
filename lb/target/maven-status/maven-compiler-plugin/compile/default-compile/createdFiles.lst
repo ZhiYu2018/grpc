@@ -1,0 +1,8 @@
+com\gexiang\client\ListServicesHandler.class
+com\gexiang\client\ListServicesHandler$1.class
+com\gexiang\client\LookupServiceHandler.class
+com\gexiang\client\GxClient.class
+com\gexiang\server\GxNameResolver.class
+com\gexiang\server\GxNameResolverFactory.class
+com\gexiang\client\LookupServiceHandler$1.class
+com\gexiang\client\ServerReflectionClient.class

@@ -1,0 +1,33 @@
+syntax = "proto3";
+package com.gexiang.grpc;
+
+option java_multiple_files = true;
+option java_outer_classname = "GrpcGateProto";
+option java_package = "com.gexiang.grpc";
+
+
+message GrpcRequest{
+	string app_id = 1;
+	string method = 2;
+	string format = 3;
+	string charset = 4;
+	string sign_type = 5;
+	string sign = 6;
+	string timestamp = 7;
+	string version = 8;
+	string app_auth_token = 9;
+	string biz_content = 10;
+}
+
+message GrpcResponse{
+	string code = 1;
+	string msg = 2;
+	string sub_code = 3;
+	string sub_msg = 4;
+	string sign = 5;
+}
+
+service GrpcGate{
+	rpc Route(GrpcRequest) returns(GrpcResponse);
+}
+
