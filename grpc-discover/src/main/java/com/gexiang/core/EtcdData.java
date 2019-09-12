@@ -12,7 +12,6 @@ import io.etcd.jetcd.options.PutOption;
 import io.etcd.jetcd.options.WatchOption;
 import io.etcd.jetcd.watch.WatchResponse;
 import io.grpc.StatusRuntimeException;
-import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,13 +24,24 @@ import java.util.function.Consumer;
 public class EtcdData implements AutoCloseable{
     public static String SERVER_PREFIX = "grpc.io";
     public static String PROP_ETCD_HOST = "etcd.host";
-
-    private static final int MAX_GET_LIMIT = 1000;
     private static final Logger logger = LoggerFactory.getLogger(EtcdData.class);
     private volatile Client etcdclient;
+    private String hostList;
     public EtcdData(String hostList){
         logger.info("Etcd host is:{}", hostList);
+        this.hostList = hostList;
         etcdclient = Client.builder().endpoints(hostList.split(";")).build();
+    }
+
+    public LeaseGrantResponse reconnect(){
+        try{
+            close();
+        }catch (Throwable t){
+            logger.info("Reconnect exception:{}", t.getMessage());
+        }
+
+        etcdclient = Client.builder().endpoints(hostList.split(";")).build();
+        return getLeaseId();
     }
 
 
@@ -47,20 +57,21 @@ public class EtcdData implements AutoCloseable{
         }
     }
 
-    public void put(String key, String value, PutOption option){
+    public int put(String key, String value, PutOption option){
         ByteSequence bsKey = ByteSequence.from(key, Charsets.UTF_8);
         ByteSequence bsValue = ByteSequence.from(value, Charsets.UTF_8);
         CompletableFuture<PutResponse> future = etcdclient.getKVClient().put(bsKey, bsValue, option);
         try {
             PutResponse rsp = future.get();
+            return 0;
         }catch (Throwable t){
             if(t instanceof StatusRuntimeException){
                 StatusRuntimeException sre = (StatusRuntimeException)t;
                 logger.error("Put key {} failed:{}", key, sre.getStatus().getCode().name());
-                return;
             }
             logger.warn("Put key {} exceptions:", key, t);
         }
+        return -1;
     }
 
     public String get(String key){
@@ -111,12 +122,14 @@ public class EtcdData implements AutoCloseable{
         return null;
     }
 
-    public void keepLeaseIdAlive(long leaseId){
+    public int keepLeaseIdAlive(long leaseId){
         CompletableFuture<LeaseKeepAliveResponse> future = etcdclient.getLeaseClient().keepAliveOnce(leaseId);
         try{
             LeaseKeepAliveResponse rsp = future.get();
+            return 0;
         }catch (Throwable t){
             logger.warn("keep avlie lease id {} exceptions:", leaseId, t);
+            return -1;
         }
     }
 

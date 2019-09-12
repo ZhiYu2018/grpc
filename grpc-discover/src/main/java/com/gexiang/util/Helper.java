@@ -36,6 +36,14 @@ public class Helper {
         return new Pair<>(fullServiceName, ip);
     }
 
+    public static void sleep(long mills){
+        try {
+            Thread.sleep(mills);
+        }catch (Throwable t){
+
+        }
+    }
+
     public static String createServerDataKey(String fullServerName, String url, String ver){
         return String.format("%s/%s/%s/%s", EtcdData.SERVER_PREFIX, fullServerName, url, ver);
     }

@@ -66,15 +66,34 @@ public class GrpcRegister implements AutoCloseable{
     }
 
     private void keepAlive(){
-        if((lastKeepTime > 0) && ((System.currentTimeMillis() - lastKeepTime)) >= leaseGrant.getTTL()*1000L){
+        if(((lastKeepTime > 0) && ((System.currentTimeMillis() - lastKeepTime)) >= leaseGrant.getTTL()*1000L)
+           || (leaseGrant == null)){
             /**兜底**/
             logger.error("Keep alieve time out:{}", (System.currentTimeMillis() - lastKeepTime));
-            doRegister();
-            lastKeepTime = System.currentTimeMillis();
+            if(doGetLeaseId() == 0) {
+                if(doRegister() == 0) {
+                    lastKeepTime = System.currentTimeMillis();
+                }
+            }
             return ;
         }
+
         lastKeepTime = System.currentTimeMillis();
-        etcdData.keepLeaseIdAlive(leaseGrant.getID());
+        GrpcBackOff grpcBackOff = new GrpcBackOff();
+        while (true) {
+            if(etcdData.keepLeaseIdAlive(leaseGrant.getID()) == 0){
+                break;
+            }
+
+            long nextMills = grpcBackOff.nextBackOffMillis();
+            if(nextMills == GrpcBackOff.STOP){
+                /**连接可能断掉，需要重新连接，获取租期**/
+                leaseGrant = null;
+                break;
+            }else{
+                Helper.sleep(nextMills);
+            }
+        }
     }
 
     private String getLocalHost(){
@@ -89,26 +108,36 @@ public class GrpcRegister implements AutoCloseable{
 
     }
 
-    private void doRegister(){
+    private int doGetLeaseId(){
+        int times = 0;
         GrpcBackOff grpcBackOff = new GrpcBackOff();
         while (true){
-            /**重新注册**/
-            leaseGrant = etcdData.getLeaseId();
+            /**重新连接，获取租期**/
+            times ++;
+            if(leaseGrant == null){
+                leaseGrant = etcdData.reconnect();
+            }else {
+                leaseGrant = etcdData.getLeaseId();
+                if(times >= 3) {
+                    /**重新连接**/
+                    leaseGrant = null;
+                }
+            }
             if(leaseGrant != null){
-                break;
+                return 0;
             }
 
             long nextMills = grpcBackOff.nextBackOffMillis();
             if(nextMills == GrpcBackOff.STOP){
                 logger.error("Retry times over");
-                return;
+                return -1;
             }
-            try {
-                Thread.sleep(nextMills);
-            }catch (Throwable t){
-
-            }
+            Helper.sleep(nextMills);
         }
+    }
+
+    private int doRegister(){
+        PutOption putOption = PutOption.newBuilder().withLeaseId(leaseGrant.getID()).build();
         synchronized (this){
             for(Map.Entry<String, String> entry: appServer.entrySet()){
                 int index = entry.getKey().lastIndexOf(":");
@@ -116,10 +145,13 @@ public class GrpcRegister implements AutoCloseable{
                 String port = entry.getKey().substring(index + 1);
                 String key = Helper.createServerDataKey(fullServerName, String.format("%s:%s", localHost, port),
                                                         entry.getValue());
-                etcdData.put(key, String.valueOf(System.currentTimeMillis()/1000),
-                        PutOption.newBuilder().withLeaseId(leaseGrant.getID()).build());
+                if(etcdData.put(key, String.valueOf(System.currentTimeMillis()/1000), putOption) != 0){
+                    return -1;
+                }
             }
         }
+
+        return 0;
     }
 
     public void register(String fullServerName, String port, String ver){
