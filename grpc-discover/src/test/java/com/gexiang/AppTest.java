@@ -3,10 +3,13 @@ package com.gexiang;
 import com.gexiang.core.EtcdData;
 import com.gexiang.util.Helper;
 import io.etcd.jetcd.KeyValue;
+import io.grpc.LoadBalancer;
 import javafx.util.Pair;
 import org.junit.Test;
 
+import java.net.Inet4Address;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.Assert.assertTrue;
 
@@ -33,5 +36,11 @@ public class AppTest {
     public void testFunc(){
         Pair<String,String> kp = Helper.getServerKeyData("grpc.io/com.server/127.0.0.1:8080/v1.0");
         System.out.println("s:" + kp.getKey() + "," + kp.getValue());
+    }
+
+    @Test
+    public void testGetIp(){
+        Optional<Inet4Address> opt = Helper.getLocalIp4Address();
+        System.out.println("ip:" + opt.get().getHostAddress());
     }
 }

@@ -8,3 +8,14 @@
 * 配置：etcd.host=http://localhost:2379;http://localhost:3379;http://localhost:4379
 * 服务提供者在成功启动之后，要注册服务利用GrpcRegister.grpcRegister().register(GrpcGateGrpc.SERVICE_NAME, String.valueOf(p), "v1.0");
 
+## REST 请求格式
+
+* POST \ Get 到ip:8080/grpc/route，端口可以自己修改
+
+* http 头部：X-Grpc-Method，比如com.gexiang.grpc.GrpcGate/Route;X-Grpc-Ver 接口版本号，比如v1.0
+
+* 请求格式目前只支持JSON
+
+* 返回格式是json 建议类似 `{String.format("{\"code\":\"%d\",\"msg\":\"%s\"}", code, msg)}`，code 200 成功，其他失败。其他字段自己定义。
+
+  

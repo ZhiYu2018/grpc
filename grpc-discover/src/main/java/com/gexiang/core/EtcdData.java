@@ -10,6 +10,7 @@ import io.etcd.jetcd.options.GetOption;
 import io.etcd.jetcd.options.PutOption;
 import io.etcd.jetcd.options.WatchOption;
 import io.etcd.jetcd.watch.WatchResponse;
+import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -111,7 +112,7 @@ public class EtcdData implements AutoCloseable{
             logger.warn("keep avlie lease id {} exceptions:", leaseId, t);
         }
     }
-
+    
     public void watch(String preKey, Consumer<WatchResponse> onNext, Consumer<Throwable> onError){
         ByteSequence bsKey = ByteSequence.from(preKey, Charsets.UTF_8);
         WatchOption wopt = WatchOption.newBuilder().withPrefix(bsKey).build();

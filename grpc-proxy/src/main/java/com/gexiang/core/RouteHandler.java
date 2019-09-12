@@ -28,7 +28,7 @@ public class RouteHandler {
             ver = vers.get(0);
         }
 
-        logger.info("Contentype:{},Method:{}, ver:{}", request.getHeaders().getContentType().toString(),
+        logger.debug("Contentype:{},Method:{}, ver:{}", request.getHeaders().getContentType().toString(),
                 method.get(0), ver);
         return Mono.create(new GrpcConsumer(method.get(0), ver, body.getBody()));
     }
