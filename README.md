@@ -7,6 +7,9 @@
 * grpc 服务，在启动服务的时候，要支持addService(ProtoReflectionService.newInstance())，具体参考server。
 * 配置：etcd.host=http://localhost:2379;http://localhost:3379;http://localhost:4379
 * 服务提供者在成功启动之后，要注册服务利用GrpcRegister.grpcRegister().register(GrpcGateGrpc.SERVICE_NAME, String.valueOf(p), "v1.0");
+## 版本依赖
+* grpc 版本 1.23.0
+* jetcd 版本 > 0.3.0，建议 下载这里的jetcd.
 
 ## REST 请求格式
 
