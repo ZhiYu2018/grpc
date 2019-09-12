@@ -6,10 +6,12 @@ import io.etcd.jetcd.kv.GetResponse;
 import io.etcd.jetcd.kv.PutResponse;
 import io.etcd.jetcd.lease.LeaseGrantResponse;
 import io.etcd.jetcd.lease.LeaseKeepAliveResponse;
+import io.etcd.jetcd.lease.LeaseRevokeResponse;
 import io.etcd.jetcd.options.GetOption;
 import io.etcd.jetcd.options.PutOption;
 import io.etcd.jetcd.options.WatchOption;
 import io.etcd.jetcd.watch.WatchResponse;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +54,11 @@ public class EtcdData implements AutoCloseable{
         try {
             PutResponse rsp = future.get();
         }catch (Throwable t){
+            if(t instanceof StatusRuntimeException){
+                StatusRuntimeException sre = (StatusRuntimeException)t;
+                logger.error("Put key {} failed:{}", key, sre.getStatus().getCode().name());
+                return;
+            }
             logger.warn("Put key {} exceptions:", key, t);
         }
     }
@@ -76,7 +83,7 @@ public class EtcdData implements AutoCloseable{
     public List<KeyValue> listPreKey(String preKey){
 
         ByteSequence bsKey = ByteSequence.from(preKey, Charsets.UTF_8);
-        GetOption option = GetOption.newBuilder().withLimit(MAX_GET_LIMIT).withPrefix(bsKey).build();
+        GetOption option = GetOption.newBuilder().withPrefix(bsKey).build();
         CompletableFuture<GetResponse> future = etcdclient.getKVClient().get(bsKey, option);
         try{
             GetResponse rsp = future.get();
@@ -111,6 +118,18 @@ public class EtcdData implements AutoCloseable{
         }catch (Throwable t){
             logger.warn("keep avlie lease id {} exceptions:", leaseId, t);
         }
+    }
+
+    public int revoke(long leaseId){
+        CompletableFuture<LeaseRevokeResponse> future = etcdclient.getLeaseClient().revoke(leaseId);
+        try{
+            LeaseRevokeResponse lrsp = future.get();
+            logger.info("Revoke msg:{}", lrsp.toString());
+            return 0;
+        }catch (Throwable t){
+            logger.warn("Revoke leaseId {}, exceptions {}", leaseId, t.getMessage());
+        }
+        return -1;
     }
     
     public void watch(String preKey, Consumer<WatchResponse> onNext, Consumer<Throwable> onError){

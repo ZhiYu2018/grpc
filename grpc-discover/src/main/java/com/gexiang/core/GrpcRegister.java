@@ -1,12 +1,12 @@
 package com.gexiang.core;
 
+import com.gexiang.util.GrpcBackOff;
 import com.gexiang.util.Helper;
 import io.etcd.jetcd.lease.LeaseGrantResponse;
 import io.etcd.jetcd.options.PutOption;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.env.Environment;
-
 import java.net.Inet4Address;
 import java.util.Map;
 import java.util.Optional;
@@ -59,7 +59,7 @@ public class GrpcRegister implements AutoCloseable{
         localHost = getLocalHost();
         logger.info("Get leaseId {}, ttl:{} seconds", leaseGrant.getID(), leaseGrant.getTTL());
         /**创建keepalive:TTL is the server chosen lease time-to-live in seconds.**/
-        long interval = 100L;
+        long interval = 150L;
         /**这个要注意优先级，在压测的情况下，出现keepalive 假死**/
         executorService = Executors.newSingleThreadScheduledExecutor((r)->{ return new Thread(r,"etcd.keep.alive");});
         executorService.scheduleAtFixedRate(()->{ GrpcRegister.this.keepAlive(); }, 0, interval, TimeUnit.MILLISECONDS);
@@ -67,8 +67,10 @@ public class GrpcRegister implements AutoCloseable{
 
     private void keepAlive(){
         if((lastKeepTime > 0) && ((System.currentTimeMillis() - lastKeepTime)) >= leaseGrant.getTTL()*1000L){
+            /**兜底**/
             logger.error("Keep alieve time out:{}", (System.currentTimeMillis() - lastKeepTime));
             doRegister();
+            lastKeepTime = System.currentTimeMillis();
             return ;
         }
         lastKeepTime = System.currentTimeMillis();
@@ -88,7 +90,25 @@ public class GrpcRegister implements AutoCloseable{
     }
 
     private void doRegister(){
-        etcdData.keepLeaseIdAlive(leaseGrant.getID());
+        GrpcBackOff grpcBackOff = new GrpcBackOff();
+        while (true){
+            /**重新注册**/
+            leaseGrant = etcdData.getLeaseId();
+            if(leaseGrant != null){
+                break;
+            }
+
+            long nextMills = grpcBackOff.nextBackOffMillis();
+            if(nextMills == GrpcBackOff.STOP){
+                logger.error("Retry times over");
+                return;
+            }
+            try {
+                Thread.sleep(nextMills);
+            }catch (Throwable t){
+
+            }
+        }
         synchronized (this){
             for(Map.Entry<String, String> entry: appServer.entrySet()){
                 int index = entry.getKey().lastIndexOf(":");

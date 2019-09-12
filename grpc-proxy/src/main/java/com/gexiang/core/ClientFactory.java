@@ -32,6 +32,7 @@ public class ClientFactory {
     public ClientFactory(Environment env){
         serverDescriptorMap = new ConcurrentHashMap<>();
         GrpcChannelPool.getPool().init(env);
+        GrpcConManger.getInstance().init(env);
     }
 
     public GrpcClient getClient(String fullName, String ver){

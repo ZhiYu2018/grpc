@@ -1,9 +1,9 @@
 package com.gexiang;
 
 import com.gexiang.core.EtcdData;
+import com.gexiang.util.GrpcBackOff;
 import com.gexiang.util.Helper;
 import io.etcd.jetcd.KeyValue;
-import io.grpc.LoadBalancer;
 import javafx.util.Pair;
 import org.junit.Test;
 
@@ -42,5 +42,13 @@ public class AppTest {
     public void testGetIp(){
         Optional<Inet4Address> opt = Helper.getLocalIp4Address();
         System.out.println("ip:" + opt.get().getHostAddress());
+    }
+
+    @Test
+    public void testBackOff(){
+        GrpcBackOff backOff = new GrpcBackOff();
+        for(int i = 1; i < 11; i++){
+            System.out.println(i + ":" + backOff.nextBackOffMillis());
+        }
     }
 }

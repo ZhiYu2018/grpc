@@ -1,9 +1,9 @@
 package com.gexiang.core;
 
 import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
 
-import com.gexiang.vo.ProxyResponse;
+import com.gexiang.vo.GrpcContext;
+import com.gexiang.vo.ProxyError;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.util.JsonFormat.TypeRegistry;
 import org.slf4j.Logger;
@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 
 import io.grpc.stub.StreamObserver;
@@ -31,51 +30,59 @@ public class MessageWriter implements StreamObserver<DynamicMessage> {
     private final JsonFormat.Printer jsonPrinter;
     private final StringBuilder stringBuilder;
     private final MonoSink<String> tMonoSink;
+    private GrpcContext grpcContext;
 
     /**
      * Creates a new {@link MessageWriter} which writes the messages it sees to the supplied
      */
-    public static MessageWriter create(TypeRegistry registry, MonoSink<String> tMonoSink) {
-        return new MessageWriter(JsonFormat.printer().usingTypeRegistry(registry), tMonoSink);
+    public static MessageWriter create(TypeRegistry registry, MonoSink<String> tMonoSink, GrpcContext grpcContext) {
+        return new MessageWriter(JsonFormat.printer().usingTypeRegistry(registry), tMonoSink, grpcContext);
     }
 
     /**
      * Returns the string representation of the stream of supplied messages. Each individual message
      * is represented as valid json, but not that the whole result is, itself, *not* valid json.
      */
-    public static String writeJsonStream(ImmutableList<DynamicMessage> messages, MonoSink<String> tMonoSink) {
-        return writeJsonStream(messages, TypeRegistry.getEmptyTypeRegistry(), tMonoSink);
+    public static String writeJsonStream(ImmutableList<DynamicMessage> messages,
+                                         MonoSink<String> tMonoSink,
+                                         GrpcContext grpcContext) {
+        return writeJsonStream(messages, TypeRegistry.getEmptyTypeRegistry(), tMonoSink, grpcContext);
     }
 
     /**
      * Returns the string representation of the stream of supplied messages. Each individual message
      * is represented as valid json, but not that the whole result is, itself, *not* valid json.
      */
-    public static String writeJsonStream(ImmutableList<DynamicMessage> messages, TypeRegistry registry
-    ,MonoSink<String> tMonoSink) {
+    public static String writeJsonStream(ImmutableList<DynamicMessage> messages, TypeRegistry registry,
+                                         MonoSink<String> tMonoSink, GrpcContext grpcContext) {
         ByteArrayOutputStream resultStream = new ByteArrayOutputStream();
-        MessageWriter writer = MessageWriter.create(registry, tMonoSink);
+        MessageWriter writer = MessageWriter.create(registry, tMonoSink, grpcContext);
         writer.writeAll(messages);
         return resultStream.toString();
     }
 
     @VisibleForTesting
-    MessageWriter(JsonFormat.Printer jsonPrinter, MonoSink<String> tMonoSink) {
+    MessageWriter(JsonFormat.Printer jsonPrinter, MonoSink<String> tMonoSink, GrpcContext grpcContext) {
         this.jsonPrinter = jsonPrinter;
         this.stringBuilder = new StringBuilder();
         this.tMonoSink = tMonoSink;
+        this.grpcContext = grpcContext;
     }
 
     @Override
     public void onCompleted() {
         tMonoSink.success(stringBuilder.toString());
+        GrpcConManger.getInstance().reqPerf(grpcContext);
+        this.grpcContext = null;
     }
 
     @Override
     public void onError(Throwable t) {
         int value = HttpStatus.SERVICE_UNAVAILABLE.value();
         String msg    = String.format("Error:%s", t.getMessage());
-        tMonoSink.success(new ProxyResponse(value, msg).toJson());
+        tMonoSink.error(new ProxyError(value, msg));
+        GrpcConManger.getInstance().reqPerf(grpcContext);
+        this.grpcContext = null;
     }
 
     @Override
