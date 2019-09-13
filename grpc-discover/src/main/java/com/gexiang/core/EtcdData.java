@@ -6,12 +6,12 @@ import io.etcd.jetcd.kv.GetResponse;
 import io.etcd.jetcd.kv.PutResponse;
 import io.etcd.jetcd.lease.LeaseGrantResponse;
 import io.etcd.jetcd.lease.LeaseKeepAliveResponse;
-import io.etcd.jetcd.lease.LeaseRevokeResponse;
 import io.etcd.jetcd.options.GetOption;
 import io.etcd.jetcd.options.PutOption;
 import io.etcd.jetcd.options.WatchOption;
 import io.etcd.jetcd.watch.WatchResponse;
 import io.grpc.StatusRuntimeException;
+import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +46,9 @@ public class EtcdData implements AutoCloseable{
 
 
     public void put(String key, String value){
+        if(etcdclient == null){
+            logger.error("Client is null");
+        }
         ByteSequence bsKey = ByteSequence.from(key, Charsets.UTF_8);
         ByteSequence bsValue = ByteSequence.from(value, Charsets.UTF_8);
         CompletableFuture<PutResponse> future = etcdclient.getKVClient().put(bsKey, bsValue);
@@ -53,11 +56,15 @@ public class EtcdData implements AutoCloseable{
             PutResponse rsp = future.get();
             logger.info("Get rsp:{}", rsp.getPrevKv().getVersion());
         }catch (Throwable t){
-            logger.warn("Put key {} exceptions:", key, t);
+            logger.warn("Put key {} exceptions:{}", key, t.getMessage());
         }
     }
 
     public int put(String key, String value, PutOption option){
+        if(etcdclient == null){
+            logger.error("Client is null");
+            return -1;
+        }
         ByteSequence bsKey = ByteSequence.from(key, Charsets.UTF_8);
         ByteSequence bsValue = ByteSequence.from(value, Charsets.UTF_8);
         CompletableFuture<PutResponse> future = etcdclient.getKVClient().put(bsKey, bsValue, option);
@@ -69,12 +76,16 @@ public class EtcdData implements AutoCloseable{
                 StatusRuntimeException sre = (StatusRuntimeException)t;
                 logger.error("Put key {} failed:{}", key, sre.getStatus().getCode().name());
             }
-            logger.warn("Put key {} exceptions:", key, t);
+            logger.warn("Put key {} exceptions:{}", key, t.getMessage());
         }
         return -1;
     }
 
     public String get(String key){
+        if(etcdclient == null){
+            logger.error("Client is null");
+            return null;
+        }
         ByteSequence bsKey = ByteSequence.from(key, Charsets.UTF_8);
         CompletableFuture<GetResponse> future = etcdclient.getKVClient().get(bsKey);
         try{
@@ -86,13 +97,16 @@ public class EtcdData implements AutoCloseable{
             logger.info("Find none such key:{}", key);
             return null;
         }catch (Throwable t){
-            logger.warn("Get key {} exceptions:", key, t);
+            logger.warn("Get key {} exceptions:{}", key, t.getMessage());
             return null;
         }
     }
 
     public List<KeyValue> listPreKey(String preKey){
-
+        if(etcdclient == null){
+            logger.error("Client is null");
+            return null;
+        }
         ByteSequence bsKey = ByteSequence.from(preKey, Charsets.UTF_8);
         GetOption option = GetOption.newBuilder().withPrefix(bsKey).build();
         CompletableFuture<GetResponse> future = etcdclient.getKVClient().get(bsKey, option);
@@ -103,52 +117,37 @@ public class EtcdData implements AutoCloseable{
             kvs.addAll(rsp.getKvs());
             return kvs;
         }catch (Throwable t){
-            logger.warn("Get key {} exceptions:", preKey, t);
+            logger.warn("Get key {} exceptions:{}", preKey, t.getMessage());
             return null;
         }
     }
 
 
     public LeaseGrantResponse getLeaseId(){
+        if(etcdclient == null){
+            logger.error("Client is null");
+            return null;
+        }
         CompletableFuture<LeaseGrantResponse> future = etcdclient.getLeaseClient().grant(0L);
         try{
             LeaseGrantResponse rsp = future.get(3, TimeUnit.SECONDS);
             logger.info("grant lease id {}, ttl {}", rsp.getID(), rsp.getTTL());
             return rsp;
         }catch (Throwable t){
-            logger.warn("grant lease id exceptions:", t);
+            logger.warn("grant lease id exceptions:{}", t.getMessage());
         }
 
         return null;
     }
 
-    public int keepLeaseIdAlive(long leaseId){
-        CompletableFuture<LeaseKeepAliveResponse> future = etcdclient.getLeaseClient().keepAliveOnce(leaseId);
-        try{
-            LeaseKeepAliveResponse rsp = future.get();
-            return 0;
-        }catch (Throwable t){
-            logger.warn("keep avlie lease id {} exceptions:", leaseId, t);
-            return -1;
-        }
+    public CloseableClient keepLeaseObserver(long leaseId, StreamObserver<LeaseKeepAliveResponse> observer){
+        return etcdclient.getLeaseClient().keepAlive(leaseId, observer);
     }
 
-    public int revoke(long leaseId){
-        CompletableFuture<LeaseRevokeResponse> future = etcdclient.getLeaseClient().revoke(leaseId);
-        try{
-            LeaseRevokeResponse lrsp = future.get();
-            logger.info("Revoke msg:{}", lrsp.toString());
-            return 0;
-        }catch (Throwable t){
-            logger.warn("Revoke leaseId {}, exceptions {}", leaseId, t.getMessage());
-        }
-        return -1;
-    }
-    
-    public void watch(String preKey, Consumer<WatchResponse> onNext, Consumer<Throwable> onError){
+    public void watch(String preKey, Consumer<WatchResponse> onNext, Consumer<Throwable> onError, Runnable runnable){
         ByteSequence bsKey = ByteSequence.from(preKey, Charsets.UTF_8);
         WatchOption wopt = WatchOption.newBuilder().withPrefix(bsKey).build();
-        Watch.Watcher watcher = etcdclient.getWatchClient().watch(bsKey,wopt, onNext, onError);
+        Watch.Watcher watcher = etcdclient.getWatchClient().watch(bsKey, wopt, onNext, onError, runnable);
     }
 
     @Override
@@ -156,6 +155,14 @@ public class EtcdData implements AutoCloseable{
         if(etcdclient != null){
             etcdclient.close();
             etcdclient = null;
+        }
+    }
+
+    public void reset(){
+        try{
+            this.close();
+        }catch (Throwable t){
+
         }
     }
 }

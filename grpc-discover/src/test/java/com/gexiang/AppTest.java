@@ -10,6 +10,7 @@ import org.junit.Test;
 import java.net.Inet4Address;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertTrue;
 
@@ -47,8 +48,9 @@ public class AppTest {
     @Test
     public void testBackOff(){
         GrpcBackOff backOff = new GrpcBackOff();
+        Consumer<String> f = System.out::println;
         for(int i = 1; i < 11; i++){
-            System.out.println(i + ":" + backOff.nextBackOffMillis());
+            f.accept(i + ":" + backOff.nextBackOffMillis());
         }
     }
 }

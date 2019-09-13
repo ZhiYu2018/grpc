@@ -71,11 +71,13 @@ public class GrpcChannelPool implements AutoCloseable{
                         case DELETE:
                             GrpcChannelPool.this.kickOut(kp, ver);
                             break;
+                        case UNRECOGNIZED:
+                            logger.info("{} is unknow event", key);
+                            break;
                     }
                 }catch (Throwable t){
                     logger.info("Parse key {} exceptions:", key, t);
                 }
-
             }
         }
     }
@@ -83,7 +85,7 @@ public class GrpcChannelPool implements AutoCloseable{
     class EtcdErrorConsumer implements Consumer<Throwable>{
         @Override
         public void accept(Throwable t){
-            logger.warn("Watch exceptions:", t);
+            logger.warn("Watch exceptions:{}", t.getMessage());
         }
     }
 
@@ -108,6 +110,7 @@ public class GrpcChannelPool implements AutoCloseable{
                 logger.info("*** shutting down gRPC proxy since JVM is shutting down");
                 try{
                     GrpcChannelPool.this.close();
+                    etcdData.close();
                 }catch (Throwable t){
 
                 }
@@ -115,6 +118,7 @@ public class GrpcChannelPool implements AutoCloseable{
                 logger.info("*** server shut down");
             }
         });
+        logger.info("Init ok");
     }
 
     public ManagedChannel getChannel(String fullServerName, String ver){
@@ -197,6 +201,11 @@ public class GrpcChannelPool implements AutoCloseable{
     }
 
     private void addWatch(){
-        etcdData.watch(EtcdData.SERVER_PREFIX, new EtcdWaterConsumer(), new EtcdErrorConsumer());
+        etcdData.watch(EtcdData.SERVER_PREFIX, new EtcdWaterConsumer(), new EtcdErrorConsumer(), new Runnable(){
+            @Override
+            public void run() {
+                logger.warn("Watch complete");
+            }
+        });
     }
 }

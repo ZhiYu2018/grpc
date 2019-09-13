@@ -1,8 +1,11 @@
 package com.gexiang.core;
 
+import com.gexiang.core.vo.KeepStatus;
 import com.gexiang.util.GrpcBackOff;
 import com.gexiang.util.Helper;
+import io.etcd.jetcd.CloseableClient;
 import io.etcd.jetcd.lease.LeaseGrantResponse;
+import io.etcd.jetcd.lease.LeaseKeepAliveResponse;
 import io.etcd.jetcd.options.PutOption;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +37,8 @@ public class GrpcRegister implements AutoCloseable{
     private volatile LeaseGrantResponse leaseGrant;
     private volatile String localHost;
     private volatile ConcurrentHashMap<String, String> appServer;
+    private volatile CloseableClient observerClient;
+    private volatile KeepStatus keepStatus;
     private ScheduledExecutorService executorService;
     private volatile long lastKeepTime;
 
@@ -44,6 +49,7 @@ public class GrpcRegister implements AutoCloseable{
     private GrpcRegister(){
         lastKeepTime = -1L;
         appServer = new ConcurrentHashMap<>();
+        keepStatus = KeepStatus.KEEP_IDLE;
     }
 
     public void init(Environment env){
@@ -57,41 +63,80 @@ public class GrpcRegister implements AutoCloseable{
         }
 
         localHost = getLocalHost();
-        logger.info("Get leaseId {}, ttl:{} seconds", leaseGrant.getID(), leaseGrant.getTTL());
+        logger.info("{} get leaseId {}, ttl:{} seconds", localHost, leaseGrant.getID(), leaseGrant.getTTL());
         /**创建keepalive:TTL is the server chosen lease time-to-live in seconds.**/
-        long interval = 150L;
-        /**这个要注意优先级，在压测的情况下，出现keepalive 假死**/
+        /**记录keep alive**/
+        observerClient = etcdData.keepLeaseObserver(leaseGrant.getID(), new EtcdKeepObserver(this::handleObserver));
+        lastKeepTime = System.currentTimeMillis();
+        keepStatus = KeepStatus.KEEP_SUCCESS;
         executorService = Executors.newSingleThreadScheduledExecutor((r)->{ return new Thread(r,"etcd.keep.alive");});
-        executorService.scheduleAtFixedRate(()->{ GrpcRegister.this.keepAlive(); }, 0, interval, TimeUnit.MILLISECONDS);
+        executorService.scheduleAtFixedRate(()->{ GrpcRegister.this.keepStatusMachine(); }, 0, 1, TimeUnit.SECONDS);
     }
 
-    private void keepAlive(){
-        if(((lastKeepTime > 0) && ((System.currentTimeMillis() - lastKeepTime)) >= leaseGrant.getTTL()*1000L)
-           || (leaseGrant == null)){
-            /**兜底**/
-            logger.error("Keep alieve time out:{}", (System.currentTimeMillis() - lastKeepTime));
-            if(doGetLeaseId() == 0) {
-                if(doRegister() == 0) {
-                    lastKeepTime = System.currentTimeMillis();
+    private void handleObserver(Object object){
+        if(etcdData == null){
+            logger.warn("Out of exceptions");
+            return ;
+        }
+        if(object instanceof LeaseKeepAliveResponse){
+            LeaseKeepAliveResponse response = (LeaseKeepAliveResponse)object;
+            long timeUsed = (System.currentTimeMillis() - lastKeepTime);
+            if(timeUsed>= leaseGrant.getTTL()*1000L) {
+                logger.warn("Keep alive time out:{},{}, time used:{}", response.getID(), response.getTTL(), timeUsed);
+                keepStatus = KeepStatus.KEEP_TIME_OUT;
+            }
+
+            lastKeepTime = System.currentTimeMillis();
+        }else if(object instanceof Throwable){
+            logger.error("Keep error:{}", ((Throwable) object).getMessage());
+            keepStatus = KeepStatus.KEEP_ERROR;
+        }else {
+            logger.info("Keep alive:{}", object);
+            /**要重新连接**/
+            keepStatus = KeepStatus.KEEP_ERROR;
+        }
+    }
+
+    private void keepStatusMachine(){
+        if(keepStatus == KeepStatus.KEEP_TIME_OUT){
+            /**先重新获取租期**/
+            logger.info("Handle time out ......");
+            if(doGetLeaseId() == 0){
+                lastKeepTime = System.currentTimeMillis();
+                if(doRegister() == 0){
+                    logger.info("Time out [Do register success]");
+                    keepStatus = KeepStatus.KEEP_SUCCESS;
+                }else{
+                    /**重新注册**/
+                    keepStatus = KeepStatus.KEEP_REGISTER;
+                    logger.info("Time out [Do register failed]");
                 }
             }
             return ;
-        }
-
-        lastKeepTime = System.currentTimeMillis();
-        GrpcBackOff grpcBackOff = new GrpcBackOff();
-        while (true) {
-            if(etcdData.keepLeaseIdAlive(leaseGrant.getID()) == 0){
-                break;
+        }else if(keepStatus == KeepStatus.KEEP_ERROR) {
+            logger.info("Handle reconnect ......");
+            if (observerClient != null) {
+                observerClient.close();
             }
-
-            long nextMills = grpcBackOff.nextBackOffMillis();
-            if(nextMills == GrpcBackOff.STOP){
-                /**连接可能断掉，需要重新连接，获取租期**/
-                leaseGrant = null;
-                break;
-            }else{
-                Helper.sleep(nextMills);
+            leaseGrant = etcdData.reconnect();
+            if (leaseGrant != null) {
+                logger.info("Get leaseid {}, ttl {}", leaseGrant.getID(), leaseGrant.getTTL());
+                observerClient = etcdData.keepLeaseObserver(leaseGrant.getID(), new EtcdKeepObserver(this::handleObserver));
+                lastKeepTime = System.currentTimeMillis();
+                if (doRegister() == 0) {
+                    logger.info("Reconnect [Do reconnect success]");
+                    keepStatus = KeepStatus.KEEP_SUCCESS;
+                } else {
+                    /**重新注册**/
+                    logger.info("Reconnect [Do reconnect failed]");
+                    keepStatus = KeepStatus.KEEP_REGISTER;
+                }
+            }
+        }else if(keepStatus == KeepStatus.KEEP_REGISTER){
+            logger.info("Handle register ......");
+            if(doRegister() == 0){
+                logger.info("Do register success");
+                keepStatus = KeepStatus.KEEP_SUCCESS;
             }
         }
     }
@@ -114,22 +159,21 @@ public class GrpcRegister implements AutoCloseable{
         while (true){
             /**重新连接，获取租期**/
             times ++;
-            if(leaseGrant == null){
-                leaseGrant = etcdData.reconnect();
-            }else {
-                leaseGrant = etcdData.getLeaseId();
-                if(times >= 3) {
-                    /**重新连接**/
-                    leaseGrant = null;
-                }
+            leaseGrant = etcdData.getLeaseId();
+            if(times >= 3) {
+                /**重新连接**/
+                logger.info("Try to reconnect");
+                leaseGrant = null;
             }
             if(leaseGrant != null){
+                logger.info("Do get leaseId success");
                 return 0;
             }
 
             long nextMills = grpcBackOff.nextBackOffMillis();
             if(nextMills == GrpcBackOff.STOP){
-                logger.error("Retry times over");
+                logger.error("Do get leaseId retry times over");
+                keepStatus = KeepStatus.KEEP_ERROR;
                 return -1;
             }
             Helper.sleep(nextMills);
@@ -145,7 +189,9 @@ public class GrpcRegister implements AutoCloseable{
                 String port = entry.getKey().substring(index + 1);
                 String key = Helper.createServerDataKey(fullServerName, String.format("%s:%s", localHost, port),
                                                         entry.getValue());
+                logger.info("Register {} with id {} again", key, leaseGrant.getID());
                 if(etcdData.put(key, String.valueOf(System.currentTimeMillis()/1000), putOption) != 0){
+                    logger.error("Do register failed");
                     return -1;
                 }
             }
