@@ -1,6 +1,6 @@
 # grpc
 ## Rest to grpc proxy
-* REST API 转grpc 服务，利用http2 达到连接服用
+* REST API 转grpc 服务，利用http2 达到连接复用，在接入层消化连接。
 * 同时利用etcd 达到负载均衡 + 服务发现.
 * 基于WebFlux 和grpc 异步特征 达到事件驱动，从而提高吞吐量，减少线程。
 ## 使用方法
