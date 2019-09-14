@@ -1,6 +1,7 @@
 package com.gexiang;
 
 import com.gexiang.core.GrpcConManger;
+import com.gexiang.vo.ConstValues;
 import com.gexiang.vo.SessionInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,22 +39,22 @@ public class ProxyFilter implements WebFilter {
         String ip;
         ip = getIpFromHead(exchange.getRequest().getHeaders());
         if(ip != null){
-            logger.info("IP:{}", ip);
+            logger.debug("IP:{}", ip);
         }
 
         ip = getValIp(exchange.getRequest().getHeaders().get(HttpHeaders.FROM));
         if(ip != null){
-            logger.info("IP:{}", ip);
+            logger.debug("IP:{}", ip);
             return ip;
         }
 
         if(exchange.getRequest().getRemoteAddress() != null){
             ip = exchange.getRequest().getRemoteAddress().getHostString();
-            logger.info("IP:{}", ip);
+            logger.debug("IP:{}", ip);
             return ip;
         }
 
-        return "N/A";
+        return ConstValues.IG_IP;
     }
 
     private static String getIpFromHead(HttpHeaders headers){

@@ -21,7 +21,7 @@ public class LoggingStatsWriter implements StreamObserver<DynamicMessage> {
 
     @Override
     public void onCompleted() {
-        logger.info("Completed rpc with " + numResponses + " response(s)");
+        logger.debug("Completed rpc with " + numResponses + " response(s)");
     }
 
     @Override
@@ -31,7 +31,7 @@ public class LoggingStatsWriter implements StreamObserver<DynamicMessage> {
 
     @Override
     public void onNext(DynamicMessage message) {
-        logger.info("Got response message");
+        logger.debug("Got response message");
         ++numResponses;
     }
 }

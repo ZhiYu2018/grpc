@@ -18,15 +18,13 @@ public class GrpcController {
 
     @GetMapping("/route")
     public Mono<String> GetRoute(ServerHttpRequest request, HttpEntity<String> body){
-        logger.info("URL is:{}, body:{}", request.getURI().toString(),
-                body.getBody());
+        logger.debug("URL is:{}, body:{}", request.getURI().toString(), body.getBody());
         return RouteHandler.handleRoute(request, body);
     }
 
     @PostMapping("/route")
     public Mono<String> PostRoute(ServerHttpRequest request, HttpEntity<String> body){
-        logger.info("URL is:{}, body:{}", request.getURI().toString(),
-                body.getBody());
+        logger.debug("URL is:{}, body:{}", request.getURI().toString(), body.getBody());
         return RouteHandler.handleRoute(request, body);
     }
 

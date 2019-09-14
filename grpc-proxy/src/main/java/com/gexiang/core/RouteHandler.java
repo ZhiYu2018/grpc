@@ -32,16 +32,9 @@ public class RouteHandler {
 
         GrpcContext grpcContext = GrpcContext.newBuilder().setBody(body.getBody()).setMethod(method.get(0))
                 .setVer(vers.get(0)).setSessionInfo(GrpcConManger.getInstance().removeSession()).build();
-        logger.info("Session:{},Contentype:{},Method:{}, ver:{}", grpcContext.getSessionInfo().getSid(),
-                request.getHeaders().getContentType().toString(),
-                grpcContext.getMethod(), grpcContext.getVer());
-        if(GrpcConManger.getInstance().limitRequest(grpcContext)){
-            int value = HttpStatus.FORBIDDEN.value();
-            String msg = "";
-            return Mono.error(new ProxyError(value, msg));
-        }else {
-            return Mono.create(new GrpcConsumer(grpcContext));
-        }
+        logger.debug("Session:{},Contentype:{},Method:{}, ver:{}", grpcContext.getSessionInfo().getSid(),
+                     request.getHeaders().getContentType().toString(), grpcContext.getMethod(), grpcContext.getVer());
+        return GrpcConManger.getInstance().limitRequest(grpcContext);
     }
 
 }
