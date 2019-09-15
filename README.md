@@ -1,6 +1,6 @@
-# grpc
+# grpc & WebFlux
 ## Rest to grpc proxy
-* REST API 转grpc 服务，利用http2 达到连接服用
+* REST API 转grpc 服务，利用http2 达到连接复用，在接入层消化连接。
 * 同时利用etcd 达到负载均衡 + 服务发现.
 * 基于WebFlux 和grpc 异步特征 达到事件驱动，从而提高吞吐量，减少线程。
 ## 使用方法
@@ -20,5 +20,5 @@
 * 请求格式目前只支持JSON
 
 * 返回格式是json 建议类似 `{String.format("{\"code\":\"%d\",\"msg\":\"%s\"}", code, msg)}`，code 200 成功，其他失败。其他字段自己定义。
-
-  
+## Thanks
+* Dino Wernli
