@@ -1,13 +1,13 @@
-package com.gexiang.core;
+package com.gexiang.io;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.stub.StreamObserver;
 
-class DoneObserver<T> implements StreamObserver<T> {
+public class DoneObserver<T> implements StreamObserver<T> {
     private final SettableFuture<Void> doneFuture;
 
-    DoneObserver() {
+    public DoneObserver() {
         this.doneFuture = SettableFuture.create();
     }
 
@@ -30,7 +30,7 @@ class DoneObserver<T> implements StreamObserver<T> {
      * Returns a future which completes when the rpc finishes. The returned future fails if the rpc
      * fails.
      */
-    ListenableFuture<Void> getCompletionFuture() {
+    public ListenableFuture<Void> getCompletionFuture() {
         return doneFuture;
     }
 }

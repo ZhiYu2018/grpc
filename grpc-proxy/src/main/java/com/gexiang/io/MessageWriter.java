@@ -1,7 +1,8 @@
-package com.gexiang.core;
+package com.gexiang.io;
 
 import java.io.ByteArrayOutputStream;
 
+import com.gexiang.core.GrpcConManger;
 import com.gexiang.vo.GrpcContext;
 import com.gexiang.vo.ProxyError;
 import com.google.protobuf.DynamicMessage;

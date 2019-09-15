@@ -1,4 +1,4 @@
-package com.gexiang.core;
+package com.gexiang.protobuf;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -37,7 +37,7 @@ public class LookupServiceHandler implements StreamObserver<ServerReflectionResp
         this.outstandingRequests = 0;
     }
 
-    ListenableFuture<DescriptorProtos.FileDescriptorSet> start(
+    public ListenableFuture<DescriptorProtos.FileDescriptorSet> start(
             StreamObserver<ServerReflectionRequest> requestStream) {
         this.requestStream = requestStream;
         requestStream.onNext(requestForSymbol(serviceName));

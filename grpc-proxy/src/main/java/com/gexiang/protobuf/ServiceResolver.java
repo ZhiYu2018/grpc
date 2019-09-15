@@ -1,4 +1,4 @@
-package com.gexiang.core;
+package com.gexiang.protobuf;
 
 import com.gexiang.vo.ProtoMethodName;
 import com.google.common.collect.ImmutableList;

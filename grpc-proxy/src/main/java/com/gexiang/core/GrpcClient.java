@@ -1,5 +1,8 @@
 package com.gexiang.core;
 
+import com.gexiang.io.CompositeStreamObserver;
+import com.gexiang.io.DoneObserver;
+import com.gexiang.io.ProxyMarshaller;
 import com.google.protobuf.Descriptors.MethodDescriptor;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.DynamicMessage;

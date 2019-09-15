@@ -16,8 +16,4 @@ public class ContextAware implements ApplicationContextAware {
     public static <T> T getBean(Class<T> var1) {
         return applicationContext.getBean(var1);
     }
-
-    public static <T> T getBean(String name){
-        return (T)applicationContext.getBean(name);
-    }
 }

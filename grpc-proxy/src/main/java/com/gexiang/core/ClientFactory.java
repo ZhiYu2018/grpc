@@ -1,6 +1,11 @@
 package com.gexiang.core;
 
+import com.gexiang.protobuf.LookupServiceHandler;
+import com.gexiang.protobuf.ProtocInvoker;
+import com.gexiang.protobuf.ServiceResolver;
+import com.gexiang.vo.ConstValues;
 import com.gexiang.vo.ProtoMethodName;
+import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.Descriptors;
@@ -18,6 +23,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import com.google.protobuf.util.JsonFormat.TypeRegistry;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -26,10 +34,27 @@ import java.util.concurrent.TimeUnit;
 public class ClientFactory {
     private static final long LOOKUP_RPC_DEADLINE_MS = 10_000;
     private static Logger logger = LoggerFactory.getLogger(ClientFactory.class);
+    private String grpcRootPath;
+    private ImmutableList<Path> protocIncludePaths;
     private ConcurrentMap<String, ServiceResolver> serverDescriptorMap;
-
     @Autowired
     public ClientFactory(Environment env){
+        grpcRootPath = env.getProperty(ConstValues.GRPC_ROOT_PATH);
+        String includePath = env.getProperty(ConstValues.GRPC_INCLUDE_PATH);
+        ImmutableList.Builder<Path> includePaths = ImmutableList.builder();
+        logger.info("Grpc root {}, include path:{}", grpcRootPath, includePath);
+        if((includePath != null) && grpcRootPath != null){
+            String [] paths = includePath.split(",");
+            for(String p:paths){
+                Path path = Paths.get(grpcRootPath + "/" + p);
+                if(Files.exists(path)){
+                    logger.info("Path {}/{} exists", grpcRootPath, p);
+                    includePaths.add(path.toAbsolutePath());
+                }
+            }
+        }
+
+        protocIncludePaths = includePaths.build();
         serverDescriptorMap = new ConcurrentHashMap<>();
         GrpcChannelPool.getPool().init(env);
         GrpcConManger.getInstance().init(env);
@@ -73,19 +98,14 @@ public class ClientFactory {
             synchronized (this) {
                 serviceResolver = serverDescriptorMap.get(key);
                 if (serviceResolver == null) {
-                    LookupServiceHandler rpcHandler = new LookupServiceHandler(grpcMethod.getFullServiceName());
-                    StreamObserver<ServerReflectionRequest> requestStream = ServerReflectionGrpc.newStub(channel)
-                            .withDeadlineAfter(LOOKUP_RPC_DEADLINE_MS, TimeUnit.MILLISECONDS)
-                            .serverReflectionInfo(rpcHandler);
-                    ListenableFuture<DescriptorProtos.FileDescriptorSet> future = rpcHandler.start(requestStream);
-                    try {
-                        DescriptorProtos.FileDescriptorSet fileDescriptorSet = future.get();
-                        serviceResolver = ServiceResolver.fromFileDescriptorSet(fileDescriptorSet);
-                        serverDescriptorMap.put(key, serviceResolver);
-                    } catch (Throwable t) {
-                        logger.error("Get file descroptorset for {}, exeption:{}", grpcMethod.getFullServiceName(), t);
-                        return null;
-                    }//
+                    /**get from ref **/
+                    DescriptorProtos.FileDescriptorSet fileDescriptorSet = getReflectionDescriptors(grpcMethod, ver, channel);
+                    if(fileDescriptorSet == null) {
+                        /**if failed load from file**/
+                        fileDescriptorSet = getProtoDescriptors(grpcMethod, ver);
+                    }
+                    serviceResolver = ServiceResolver.fromFileDescriptorSet(fileDescriptorSet);
+                    serverDescriptorMap.put(key, serviceResolver);
                 }//if
             }// end sy
         }//end if
@@ -97,4 +117,32 @@ public class ClientFactory {
         return methodDescriptor;
     }
 
+    private DescriptorProtos.FileDescriptorSet getProtoDescriptors(ProtoMethodName grpcMethod, String ver){
+        if(grpcRootPath != null) {
+            String root = String.format("%s/%s/%s", grpcRootPath, grpcMethod.getFullServiceName(),ver);
+            ProtocInvoker protocInvoker = new ProtocInvoker(Paths.get(root), protocIncludePaths);
+            try{
+                return protocInvoker.invoke();
+            }catch (Throwable t){
+                logger.error("Get proto for {} exception {}", grpcMethod.getServiceName(), t.getMessage());
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private DescriptorProtos.FileDescriptorSet getReflectionDescriptors(ProtoMethodName grpcMethod, String ver, Channel channel){
+        LookupServiceHandler rpcHandler = new LookupServiceHandler(grpcMethod.getFullServiceName());
+        StreamObserver<ServerReflectionRequest> requestStream = ServerReflectionGrpc.newStub(channel)
+                .withDeadlineAfter(LOOKUP_RPC_DEADLINE_MS, TimeUnit.MILLISECONDS)
+                .serverReflectionInfo(rpcHandler);
+        ListenableFuture<DescriptorProtos.FileDescriptorSet> future = rpcHandler.start(requestStream);
+        try {
+            DescriptorProtos.FileDescriptorSet fileDescriptorSet = future.get();
+            return fileDescriptorSet;
+        } catch (Throwable t) {
+            logger.error("Get file descroptorset for {}, exeption:{}", grpcMethod.getFullServiceName(), t);
+            return null;
+        }//
+    }
 }

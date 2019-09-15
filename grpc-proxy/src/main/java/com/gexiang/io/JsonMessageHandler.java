@@ -1,4 +1,4 @@
-package com.gexiang.core;
+package com.gexiang.io;
 
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.DynamicMessage;

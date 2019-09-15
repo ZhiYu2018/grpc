@@ -23,7 +23,7 @@ import java.util.function.Consumer;
 
 public class EtcdData implements AutoCloseable{
     public static String SERVER_PREFIX = "grpc.io";
-    public static String PROP_ETCD_HOST = "etcd.host";
+    public static String PROP_ETCD_HOST = "grpc.etcd.host";
     private static final Logger logger = LoggerFactory.getLogger(EtcdData.class);
     private volatile Client etcdclient;
     private String hostList;
