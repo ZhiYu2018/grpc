@@ -1,4 +1,4 @@
-# grpc
+# grpc & 
 ## Rest to grpc proxy
 * REST API 转grpc 服务，利用http2 达到连接复用，在接入层消化连接。
 * 同时利用etcd 达到负载均衡 + 服务发现.
