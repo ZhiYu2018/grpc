@@ -20,5 +20,5 @@
 * 请求格式目前只支持JSON
 
 * 返回格式是json 建议类似 `{String.format("{\"code\":\"%d\",\"msg\":\"%s\"}", code, msg)}`，code 200 成功，其他失败。其他字段自己定义。
-
-  
+## Thanks
+* Dino Wernli
