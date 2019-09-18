@@ -3,6 +3,7 @@ package com.gexiang.core;
 import com.gexiang.protobuf.LookupServiceHandler;
 import com.gexiang.protobuf.ProtocInvoker;
 import com.gexiang.protobuf.ServiceResolver;
+import com.gexiang.util.Helper;
 import com.gexiang.vo.ConstValues;
 import com.gexiang.vo.ProtoMethodName;
 import com.google.common.collect.ImmutableList;
@@ -43,7 +44,7 @@ public class ClientFactory {
         String includePath = env.getProperty(ConstValues.GRPC_INCLUDE_PATH);
         ImmutableList.Builder<Path> includePaths = ImmutableList.builder();
         logger.info("Grpc root {}, include path:{}", grpcRootPath, includePath);
-        if((includePath != null) && grpcRootPath != null){
+        if(!(Helper.isStrEmpty(includePath)) && (Helper.isStrEmpty(grpcRootPath))){
             String [] paths = includePath.split(",");
             for(String p:paths){
                 Path path = Paths.get(grpcRootPath + "/" + p);

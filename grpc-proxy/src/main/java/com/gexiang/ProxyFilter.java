@@ -31,7 +31,7 @@ public class ProxyFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange serverWebExchange, WebFilterChain webFilterChain) {
         serverWebExchange.getRequest().getHeaders();
-        GrpcConManger.getInstance().addSession(new SessionInfo(SessionId.getAndIncrement(), getIp(serverWebExchange)));
+        GrpcConManger.getInstance().addSession(new SessionInfo(SessionId.incrementAndGet(), getIp(serverWebExchange)));
         return webFilterChain.filter(serverWebExchange);
     }
 

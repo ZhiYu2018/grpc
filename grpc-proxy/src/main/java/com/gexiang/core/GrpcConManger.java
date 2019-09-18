@@ -1,6 +1,7 @@
 package com.gexiang.core;
 
 
+import com.gexiang.util.Helper;
 import com.gexiang.vo.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -107,7 +108,7 @@ public class GrpcConManger {
     }
 
     private int getIpConcurrent(String ip){
-        if((ip == null) || ConstValues.IG_IP.equals(ip)){
+        if(Helper.isStrEmpty(ip) || ConstValues.IG_IP.equals(ip)){
             return 0;
         }
 

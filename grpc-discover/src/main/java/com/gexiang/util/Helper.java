@@ -36,6 +36,10 @@ public class Helper {
         return new Pair<>(fullServiceName, ip);
     }
 
+    public static boolean isStrEmpty(String str){
+        return ((str == null) || str.isEmpty());
+    }
+
     public static void sleep(long mills){
         try {
             Thread.sleep(mills);
